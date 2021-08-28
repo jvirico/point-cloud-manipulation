@@ -49,7 +49,7 @@ def PGM3D_GetMetadata(filename='./data/shepplogan.pgm3d'):
 
     ### Converting data to 3D numpy array for future manipulation
     val = np.loadtxt(filename,dtype=np.int32, skiprows=3)
-    print('Raw data: %s'% val[:20])
+    #print('Raw data: %s'% val[:20])
     val_mat = val.reshape([size[0],size[1],size[2]])
     #print(val_mat[0])
     return val_mat, max_value
@@ -94,7 +94,7 @@ def TEST_01():
 ##  Utils for voxel, matrix, and color manipulation. From PC to mesh (3D reconstruction).
 #
 
-def intensity_resampling(PC, max_value, bins=0):
+def intensity_resampling(pcd, max_value, bins=0):
     '''
         downsamling intensity values of 3D volume
     '''
@@ -103,10 +103,10 @@ def intensity_resampling(PC, max_value, bins=0):
         border = np.floor(max_value/bins)
         print('Resampling intensity values')
         for i in trange(bins-1):
-            PC[(PC>=border*i) & (PC<border*(i+1))] = border*i
+            pcd[(pcd>=border*i) & (pcd<border*(i+1))] = border*i
         #upper lable case
-        PC[PC>=border*(bins-1)]=max_value
-    return PC
+        pcd[pcd>=border*(bins-1)]=max_value
+    return pcd
 
 def GetMesh(file, labels):
     '''
@@ -114,14 +114,39 @@ def GetMesh(file, labels):
         we simplify the intensity levels and use them to lable different objects in the scene
     '''
     # TODO:
-    #   - Reduce resolution of PC
+    #   - Support for other popular PC file formats such as .PLY
     # DONE:
     #   (1) Convert data to numpy
     #   (2) Reduce resolution of intensity levels
+    #   (3) Triangulation loop
+    #       - we go over each voxel and its 3 forward neighbors
+    #       - if two neighbors have differnt intensities (and none is background), we create a separator
+    #       - the voxels are storeda as vertices in 'vertices dictio', the triangles are stored as faces in 'faces dictio'
 
     ## (1)
     # obtaining data in numpy matrix, plus max intensity value of voxels
-    val_mat, max_int = PGM3D_GetMetadata(file)
+    pcd, max_int = PGM3D_GetMetadata(file)
     ## (2)
-    #
-    unique_intensities = np.sort(np.unique(val_mat))
+    # reduce resolution
+    pcd = intensity_resampling(pcd,max_int,labels)
+    ## (3)
+    u_intensites = np.sort(np.unique(pcd))
+    background = u_intensites[0]
+    # if first voxel is a point (starting point for triangulation), we padd the volume with background to ease 3 neighbor triangulation
+    if (pcd[0,0,0]!=background):
+        m,n,p = pcd.shape
+        M = np.full((m+2,n+2,p+2),background)
+        M[1:-1,1:-1,1:-1] = pcd
+        pcd = M
+
+    # create data structures to store vertices and faces, will be grouped by intensity
+    vertices = {}
+    faces = {}
+    # initialize so we do not run into problems when saving to file
+    for i in range(1,len(u_intensites)):
+        vertices[i] = []
+        faces[i] = []
+
+    
+
+
